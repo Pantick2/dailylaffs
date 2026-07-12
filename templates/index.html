@@ -4,22 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dailylaffs - AI Comedy Generator</title>
-    <script async src="https://googlesyndication.com" crossorigin="anonymous"></script>
+    <!-- Scriptul principal Google AdSense incarcat o singura data in <head> -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3528838516008000" crossorigin="anonymous"></script>
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #0b0f19; color: #fff; text-align: center; padding: 30px 20px; }
         .container { max-width: 600px; background: #1a2333; padding: 40px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin: 0 auto; border: 1px solid #2e3c56; }
         h1 { color: #ff9f43; font-size: 2.5rem; margin-bottom: 5px; }
         .subtitle { color: #8a99ad; margin-bottom: 25px; font-style: italic; }
-        .story-box { background: #0b0f19; padding: 20px; border-radius: 8px; min-height: 100px; text-align: left; line-height: 1.6; font-size: 18px; white-space: pre-wrap; border-left: 5px solid #ff9f43; margin-bottom: 25px; display: none; }
-        .btn-group { display: flex; gap: 15px; margin-bottom: 25px; }
-        button { color: #0b0f19; border: none; padding: 15px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; flex: 1; }
-        button:hover { transform: scale(1.02); }
-        button:disabled { background-color: #555 !important; color: #aaa !important; cursor: not-allowed; }
-        .btn-post { background-color: #ff9f43; }
-        .btn-post:hover { background-color: #ffb366; }
-        .btn-next { background-color: #42b72a; color: white; }
-        .btn-next:hover { background-color: #4cd137; }
-        .loading { display: none; color: #ff9f43; margin-bottom: 15px; font-weight: bold; }
+        .story-box { background: #0b0f19; padding: 20px; border-radius: 8px; min-height: 100px; text-align: left; line-height: 1.6; font-size: 18px; white-space: pre-wrap; border-left: 5px solid #ff9f43; margin-bottom: 10px; }
         .ads-container { margin: 20px 0; min-height: 90px; background: rgba(255,255,255,0.02); border-radius: 8px; padding: 10px; }
     </style>
 </head>
@@ -28,56 +20,34 @@
         <h1>😂 Dailylaffs</h1>
         <div class="subtitle">Your daily dose of AI-powered humor</div>
         
+        <!-- BANNER ADSENSE 1 (Dailylaffs - Slot: 2487879769) -->
         <div class="ads-container">
-            <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-3528838516008000" data-ad-slot="2487879769" data-ad-format="auto" data-full-width-responsive="true"></ins>
-            <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+            <ins class="adsbygoogle"
+                 style="display:block"
+                 data-ad-client="ca-pub-3528838516008000"
+                 data-ad-slot="2487879769"
+                 data-ad-format="auto"
+                 data-full-width-responsive="true"></ins>
+            <script>
+                 (adsbygoogle = window.adsbygoogle || []).push({});
+            </script>
         </div>
 
-        <div class="loading" id="loading-text">Writing something hilarious... 🤫</div>
-        <div class="story-box" id="story-display"></div>
+        <!-- CASETA TEXT POVESTE AUTOMATA -->
+        <div class="story-box" id="story-display">{{ poveste }}</div>
         
-        <div class="btn-group">
-            <button id="post-btn" class="btn-post" onclick="fetchStory('/generate-and-post')">Gen & Post Facebook</button>
-            <button id="next-btn" class="btn-next" onclick="fetchStory('/next-story')">Next Story (Read Only)</button>
-        </div>
-
+        <!-- BANNER ADSENSE 2 (dailylaffs 2 - Slot: 6832685974) -->
         <div class="ads-container">
-            <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-3528838516008000" data-ad-slot="6832685974" data-ad-format="auto" data-full-width-responsive="true"></ins>
-            <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+            <ins class="adsbygoogle"
+                 style="display:block"
+                 data-ad-client="ca-pub-3528838516008000"
+                 data-ad-slot="6832685974"
+                 data-ad-format="auto"
+                 data-full-width-responsive="true"></ins>
+            <script>
+                 (adsbygoogle = window.adsbygoogle || []).push({});
+            </script>
         </div>
     </div>
-
-    <script>
-        async function fetchStory(endpoint) {
-            const postBtn = document.getElementById('post-btn');
-            const nextBtn = document.getElementById('next-btn');
-            const loading = document.getElementById('loading-text');
-            const display = document.getElementById('story-display');
-
-            postBtn.disabled = true;
-            nextBtn.disabled = true;
-            loading.style.display = 'block';
-            display.style.display = 'none';
-
-            try {
-                const response = await fetch(endpoint, { method: 'POST' });
-                const data = await response.json();
-
-                if (data.success) {
-                    display.innerText = data.story;
-                    display.style.display = 'block';
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (err) {
-                alert('Server connection failed.');
-            } finally {
-                postBtn.disabled = false;
-                nextBtn.disabled = false;
-                loading.style.display = 'none';
-            }
-        }
-    </script>
 </body>
 </html>
-

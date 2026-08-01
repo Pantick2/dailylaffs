@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: daily-laffs
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 3000
+      - key: SITE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: USE_GCS_STORAGE
+        value: true
+      - key: GCS_BUCKET_NAME
+        sync: false
+      - key: GCS_PUBLIC_BASE_URL
+        sync: false
+      - key: FACEBOOK_PAGE_ID
+        sync: false
+      - key: FACEBOOK_PAGE_ACCESS_TOKEN
+        sync: false
+      - key: INSTAGRAM_IG_USER_ID
+        sync: false
+      - key: INSTAGRAM_ACCESS_TOKEN
+        sync: false

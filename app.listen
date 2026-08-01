@@ -1,0 +1,29 @@
+// 📰 Flux RSS automat pentru Daily Laffs
+app.get('/rss.xml', (req, res) => {
+  const memes = getMemes();
+  const siteUrl = process.env.SITE_URL || 'http://localhost:3000';
+
+  const feed = new Feed({
+    title: 'Daily Laffs — Funny Memes',
+    description: 'Your daily dose of funny & relatable memes, automatically generated.',
+    id: siteUrl,
+    link: siteUrl,
+    language: 'en',
+    copyright: `© ${new Date().getFullYear()} Daily Laffs`,
+    updated: memes.length ? new Date(memes[0].createdAt) : new Date()
+  });
+
+  memes.forEach(meme => {
+    feed.addItem({
+      title: meme.title.replace(/<[^>]*>/g, ''),
+      id: `${siteUrl}/meme.html?id=${meme.slug}`,
+      link: `${siteUrl}/meme.html?id=${meme.slug}`,
+      description: `${meme.body}\n\n${meme.closing}`,
+      date: new Date(meme.createdAt),
+      image: `${siteUrl}${meme.imageUrl}`
+    });
+  });
+
+  res.set('Content-Type', 'application/rss+xml; charset=utf-8');
+  res.send(feed.rss2());
+});

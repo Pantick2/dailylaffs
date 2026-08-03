@@ -7,7 +7,8 @@ const { OpenAI } = require('openai');
 const puppeteer = require('puppeteer');
 const { Storage } = require('@google-cloud/storage');
 const { v4: uuidv4 } = require('uuid');
-const Feed = require('feed');
+const { Feed } = require('feed');
+const { isUniqueJoke } = require('./joke-utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,6 +17,8 @@ const USE_GCS_STORAGE = process.env.USE_GCS_STORAGE === 'true';
 const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME || '';
 const GCS_PUBLIC_BASE_URL = (process.env.GCS_PUBLIC_BASE_URL || '').replace(/\/$/, '');
 const MEME_DATA_OBJECT = 'data/memes-data.json';
+const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Europe/Bucharest';
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const storage = USE_GCS_STORAGE ? new Storage() : null;
@@ -68,37 +71,126 @@ function buildGcsPublicUrl(objectPath) {
   return `https://storage.googleapis.com/${GCS_BUCKET_NAME}/${objectPath}`;
 }
 
-async function generateMemeText() {
-  const prompt = `Create a SHORT, FUNNY, RELATABLE meme in English, STRICTLY max 3 lines total:
----
-Title: [short catchy title + 1 emoji]
-Punchline: [1-2 short funny sentences, casual, relatable, max 80 chars total]
-End: [short funny/ironic one-liner]
-Topic: everyday life, funny situations, relatable moments. Keep it clean, SHORT, funny — NO long paragraphs!`;
+function getCurrentWeekdayName() {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    timeZone: APP_TIMEZONE
+  }).format(new Date());
+  return WEEKDAYS.includes(weekday) ? weekday : 'Monday';
+}
 
-  const res = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.9
+function normalizeWeekdayReferences(text, currentWeekday) {
+  if (!text) return '';
+  const dayRegex = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi;
+  return String(text).replace(dayRegex, (match) => {
+    if (match[0] === match[0].toLowerCase()) {
+      return currentWeekday.toLowerCase();
+    }
+    return currentWeekday;
   });
-  return res.choices[0].message.content;
+}
+
+function buildHalfTeaserText(body = '', closing = '') {
+  const full = cleanText(`${body} ${closing}`);
+  if (!full) return 'Click the link for the full meme.';
+
+  const words = full.split(' ').filter(Boolean);
+  const halfCount = Math.max(8, Math.floor(words.length / 2));
+  const half = words.slice(0, halfCount).join(' ');
+  return `${half}... Click the link for the full meme.`;
+}
+
+async function generateMemeText() {
+  const todayWeekday = getCurrentWeekdayName();
+  const prompt = `You are a sharp stand-up comedian writing short, original jokes for a comedy app. Write actual jokes, not meme captions.
+Hard rules:
+- Output exactly 3 lines using this format only.
+- Write everything in English only.
+- Make each line feel like a real joke, not a generic description.
+- Be absurd, self-deprecating, painfully relatable, and unexpectedly clever.
+- The punchline should twist the setup in a surprising way.
+- Avoid corporate or motivational wording. Sound human, chaotic, and funny.
+- Do not repeat old joke ideas, phrases, or themes. Make it fresh and original.
+- If you mention a weekday, you MUST use today: ${todayWeekday}.
+
+Output format:
+---
+Title: [short joke title, max 7 words + 1 emoji, punchy]
+Punchline: [a relatable setup that turns into a funny twist]
+End: [a sharp closing line that lands hard]
+Topic inspiration: adulting failures, social anxiety, online shopping addiction, sleep procrastination, gym guilt, budget delusions, phone addiction, meal planning lies, work meetings, overthinking at 3am.`;
+
+  try {
+    const res = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.9
+    });
+    return res.choices[0].message.content;
+  } catch (err) {
+    console.error('⚠️ OpenAI unavailable, using fallback meme text:', err.message);
+    const fallback = [
+      {
+        title: 'My Discipline Is Fake 😅',
+        body: 'I made a 5am workout plan, then spent 20 minutes finding the perfect sneakers to avoid actually working out.',
+        end: 'My motivation is just a very optimistic ghost.'
+      },
+      {
+        title: 'Budgeting Is a Sport 🧾',
+        body: 'I said I was staying in budget, then bought a candle, a notebook, and a tiny lamp I absolutely did not need.',
+        end: 'My savings account is just emotional support money.'
+      },
+      {
+        title: 'Phone Addiction 📱',
+        body: 'I told myself I would scroll less today, then opened my phone to check the time and somehow ended up watching a man fold a fitted sheet.',
+        end: 'The internet is just a highly organized distraction machine.'
+      },
+      {
+        title: '3AM Brain 🌙',
+        body: 'At 3am I started thinking about my life choices and somehow ended up comparing my salary to a raccoon’s side hustle.',
+        end: 'My brain is a tiny office with no HR.'
+      }
+    ];
+    const pick = fallback[Math.floor(Math.random() * fallback.length)];
+    return `Title: ${pick.title}\nPunchline: ${pick.body}\nEnd: ${pick.end}`;
+  }
 }
 
 function parseMemeText(text) {
+  const todayWeekday = getCurrentWeekdayName();
   return {
-    title: text.match(/Title:\s*(.*)/)?.[1] || 'Funny Meme 😂',
-    body: text.match(/Punchline:\s*(.*)/)?.[1] || 'Something relatable that made you smile!',
-    closing: text.match(/End:\s*(.*)/)?.[1] || ''
+    title: normalizeWeekdayReferences(text.match(/Title:\s*(.*)/)?.[1] || 'Funny Meme 😂', todayWeekday),
+    body: normalizeWeekdayReferences(text.match(/Punchline:\s*(.*)/)?.[1] || 'Something relatable that made you smile!', todayWeekday),
+    closing: normalizeWeekdayReferences(text.match(/End:\s*(.*)/)?.[1] || '', todayWeekday)
   };
 }
 
 function getRandomBackground() {
   const bgs = [
-    'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1533738363-b7f9aef128ce?auto=format&fit=crop&w=800&q=80'
+    // office / work chaos
+    'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80',
+    // coffee / morning
+    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=800&q=80',
+    // gym / fitness
+    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80',
+    // couch / lazy day
+    'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=800&q=80',
+    // phone addiction
+    'https://images.unsplash.com/photo-1512428559087-560fa5ceab42?auto=format&fit=crop&w=800&q=80',
+    // shopping / money
+    'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=800&q=80',
+    // night / 3am
+    'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&w=800&q=80',
+    // food / pizza
+    'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=800&q=80',
+    // sleep / bed
+    'https://images.unsplash.com/photo-1520206183501-b80df61043c2?auto=format&fit=crop&w=800&q=80',
+    // meeting / laptop
+    'https://images.unsplash.com/photo-1588196749597-9ff075ee6b5b?auto=format&fit=crop&w=800&q=80',
+    // grocery store
+    'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
+    // stressed / overthinking
+    'https://images.unsplash.com/photo-1541199249251-f713e6145474?auto=format&fit=crop&w=800&q=80'
   ];
 
   let index = Math.floor(Math.random() * bgs.length);
@@ -119,8 +211,13 @@ async function generateImage(html) {
   await page.setViewport({ width: 800, height: 800 });
   await page.setContent(html, { waitUntil: 'networkidle0' });
   const img = await page.screenshot({ type: 'png' });
+  // Teaser shows only the upper part so full meme requires click-through.
+  const teaser = await page.screenshot({
+    type: 'png',
+    clip: { x: 0, y: 0, width: 800, height: 280 }
+  });
   await browser.close();
-  return img;
+  return { img, teaser };
 }
 
 async function ensureDataFile() {
@@ -165,10 +262,10 @@ async function writeMemes(memes) {
   await fs.writeFile('memes-data.json', json);
 }
 
-async function saveGeneratedImage(imageBuffer, fileName) {
+async function saveGeneratedImage(imageBuffer, fileName, folder = 'memes') {
   if (USE_GCS_STORAGE) {
     ensureGcsConfigured();
-    const objectPath = `memes/${fileName}`;
+    const objectPath = `${folder}/${fileName}`;
     await bucket.file(objectPath).save(imageBuffer, {
       contentType: 'image/png',
       resumable: false,
@@ -179,9 +276,11 @@ async function saveGeneratedImage(imageBuffer, fileName) {
     return buildGcsPublicUrl(objectPath);
   }
 
-  const filePath = path.join(__dirname, 'public', 'memes', fileName);
+  const dirPath = path.join(__dirname, 'public', folder);
+  await fs.mkdir(dirPath, { recursive: true });
+  const filePath = path.join(dirPath, fileName);
   await fs.writeFile(filePath, imageBuffer);
-  return `/memes/${fileName}`;
+  return `/${folder}/${fileName}`;
 }
 
 async function postMemeToFacebook(meme) {
@@ -194,8 +293,8 @@ async function postMemeToFacebook(meme) {
 
   const shareUrl = `${getSiteUrl()}/m/${meme.slug}`;
   const title = cleanText(meme.title);
-  const body = cleanText(meme.body);
-  const message = `${title}\n${body}\n\nClick to see the full meme ⬇️`;
+  const teaser = buildHalfTeaserText(meme.body, meme.closing);
+  const message = `${title}\n${teaser}\n\n${shareUrl}`;
 
   await axios.post(`https://graph.facebook.com/v20.0/${pageId}/feed`, null, {
     params: {
@@ -252,7 +351,29 @@ async function postMemeToInstagram(meme) {
 
 async function generateAndSaveMeme(source = 'manual') {
   await ensureDataFile();
-  const { title, body, closing } = parseMemeText(await generateMemeText());
+  const existingMemes = await readMemes();
+  let generated = null;
+  let attempts = 0;
+
+  while (!generated && attempts < 8) {
+    attempts += 1;
+    const parsed = parseMemeText(await generateMemeText());
+    const candidate = {
+      title: parsed.title,
+      body: parsed.body,
+      closing: parsed.closing
+    };
+
+    if (isUniqueJoke(candidate, existingMemes)) {
+      generated = candidate;
+    }
+  }
+
+  if (!generated) {
+    throw new Error('Could not generate a unique joke after several attempts.');
+  }
+
+  const { title, body, closing } = generated;
   const bg = getRandomBackground();
   const html = `
   <html><body style="margin:0;padding:40px;background:url('${bg}') center/cover;min-height:800px;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;color:white;text-shadow:2px 2px 4px rgba(0,0,0,0.8);">
@@ -263,9 +384,11 @@ async function generateAndSaveMeme(source = 'manual') {
     </div>
   </body></html>`;
 
-  const imgBuffer = await generateImage(html);
+  const { img: imgBuffer, teaser: teaserBuffer } = await generateImage(html);
   const imgName = `${uuidv4()}.png`;
   const imageUrl = await saveGeneratedImage(imgBuffer, imgName);
+  const teaserName = `${imgName.replace('.png', '')}-teaser.png`;
+  const teaserUrl = await saveGeneratedImage(teaserBuffer, teaserName, 'memes/teasers');
 
   const now = Date.now();
   const newMeme = {
@@ -275,6 +398,7 @@ async function generateAndSaveMeme(source = 'manual') {
     body,
     closing,
     imageUrl,
+    teaserUrl,
     createdAt: new Date().toISOString()
   };
 
@@ -334,10 +458,10 @@ app.get('/m/:slug', async (req, res) => {
   }
 
   const siteUrl = getSiteUrl();
-  const imageUrl = getPublicImageUrl(meme.imageUrl);
+  const previewImageUrl = getPublicImageUrl(meme.teaserUrl || meme.imageUrl);
   const canonicalUrl = `${siteUrl}/m/${meme.slug}`;
   const title = cleanText(meme.title) || 'Daily Laffs Meme';
-  const description = cleanText(`${meme.body} ${meme.closing || ''}`) || 'Funny meme from Daily Laffs';
+  const description = buildHalfTeaserText(meme.body, meme.closing);
 
   res.set('Content-Type', 'text/html; charset=utf-8');
   res.send(`<!DOCTYPE html>
@@ -351,12 +475,12 @@ app.get('/m/:slug', async (req, res) => {
   <meta property="og:site_name" content="Daily Laffs">
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
-  <meta property="og:image" content="${escapeHtml(imageUrl)}">
+  <meta property="og:image" content="${escapeHtml(previewImageUrl)}">
   <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
-  <meta name="twitter:image" content="${escapeHtml(imageUrl)}">
+  <meta name="twitter:image" content="${escapeHtml(previewImageUrl)}">
   <meta http-equiv="refresh" content="0; url=/meme.html?id=${encodeURIComponent(meme.slug)}">
   <link rel="canonical" href="${escapeHtml(canonicalUrl)}">
 </head>
@@ -381,7 +505,7 @@ app.get('/rss.xml', async (req, res) => {
   memes.forEach(m => feed.addItem({
     title: m.title,
     link: `${getSiteUrl()}/m/${m.slug}`,
-    description: `${m.body}\n${m.closing}`,
+    description: buildHalfTeaserText(m.body, m.closing),
     date: new Date(m.createdAt),
     image: getPublicImageUrl(m.imageUrl)
   }));

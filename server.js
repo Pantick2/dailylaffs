@@ -142,6 +142,25 @@ function buildMemeImageHtml({ bg, title, bodyText, closingText = '', showRevealB
   </body></html>`;
 }
 
+async function generateShareTeaserImage(meme) {
+  const sourceImage = getPublicImageUrl(meme.teaserUrl || meme.imageUrl);
+  const teaserHtml = buildMemeImageHtml({
+    bg: sourceImage,
+    title: meme.title,
+    bodyText: buildQuestionTeaserText(meme.body),
+    closingText: '',
+    showRevealButton: true
+  });
+
+  const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 800, height: 800 });
+  await page.setContent(teaserHtml, { waitUntil: 'networkidle0' });
+  const buffer = await page.screenshot({ type: 'png' });
+  await browser.close();
+  return buffer;
+}
+
 function parseJsonSafe(text = '') {
   const normalized = String(text).replace(/^\uFEFF/, '');
   return JSON.parse(normalized);
@@ -666,14 +685,30 @@ app.use(express.static('public'));
 // Landing page for social crawlers (Open Graph preview + click-through link)
 app.get('/m/:slug', async (req, res) => {
   const memes = await readMemes();
-  const meme = memes.find(m => m.slug === req.params.slug);
+  const memeIndex = memes.findIndex(m => m.slug === req.params.slug);
+  const meme = memeIndex >= 0 ? memes[memeIndex] : null;
   if (!meme) {
     return res.status(404).send('Meme not found');
   }
 
+  let previewImagePath = meme.shareTeaserUrl || meme.teaserUrl || meme.imageUrl;
+  if (!meme.shareTeaserUrl) {
+    try {
+      const shareTeaserBuffer = await generateShareTeaserImage(meme);
+      const shareTeaserName = `${meme.slug}-share-teaser.png`;
+      const shareTeaserUrl = await saveGeneratedImage(shareTeaserBuffer, shareTeaserName, 'memes/teasers');
+      memes[memeIndex] = { ...meme, shareTeaserUrl };
+      await writeMemes(memes);
+      previewImagePath = shareTeaserUrl;
+    } catch (err) {
+      console.warn(`⚠️ Could not generate share teaser for ${meme.slug}: ${err.message}`);
+    }
+  }
+
   const siteUrl = getSiteUrl();
-  const previewImageUrl = getPublicImageUrl(meme.teaserUrl || meme.imageUrl);
+  const previewImageUrl = getPublicImageUrl(previewImagePath);
   const canonicalUrl = `${siteUrl}/m/${meme.slug}`;
+  const ogUrl = `${siteUrl}${req.originalUrl}`;
   const title = cleanText(meme.title) || 'Daily Laffs Meme';
   const description = buildHalfTeaserText(meme.body, meme.closing);
 
@@ -691,7 +726,7 @@ app.get('/m/:slug', async (req, res) => {
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:image" content="${escapeHtml(previewImageUrl)}">
-  <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
+  <meta property="og:url" content="${escapeHtml(ogUrl)}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">

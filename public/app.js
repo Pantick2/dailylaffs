@@ -43,7 +43,8 @@ if (document.getElementById('content')) {
       })
       .then(data => {
         const { current, prev, next } = data;
-        const shareUrl = `${window.location.origin}/m/${current.slug}`;
+        const shareStamp = current.id || Date.now();
+        const shareUrl = `${window.location.origin}/m/${current.slug}?v=${encodeURIComponent(shareStamp)}`;
         const teaserImageUrl = current.teaserUrl || current.imageUrl;
         const fullImageUrl = current.imageUrl;
         const cleanBody = current.body.replace(/<[^>]*>/g, '').trim();

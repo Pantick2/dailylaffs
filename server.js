@@ -455,16 +455,28 @@ async function postMemeToFacebook(meme) {
 
   const shareUrl = `${getSiteUrl()}/m/${meme.slug}`;
   const title = cleanText(meme.title);
-  const teaser = buildHalfTeaserText(meme.body, meme.closing);
-  const message = `${title}\n${teaser}\n\n${shareUrl}`;
+  const teaserLine = buildQuestionTeaserText(meme.body);
+  const teaserImageUrl = getPublicImageUrl(meme.teaserUrl || meme.imageUrl);
+  const message = `${title}\n${teaserLine}\n\nTap the link for the full joke:\n${shareUrl}`;
 
-  await axios.post(`https://graph.facebook.com/v20.0/${pageId}/feed`, null, {
-    params: {
-      message,
-      link: shareUrl,
-      access_token: pageToken
-    }
-  });
+  try {
+    await axios.post(`https://graph.facebook.com/v20.0/${pageId}/photos`, null, {
+      params: {
+        url: teaserImageUrl,
+        caption: message,
+        access_token: pageToken
+      }
+    });
+  } catch (photoErr) {
+    console.warn(`⚠️ Facebook photo post failed for ${meme.slug}, falling back to link post: ${photoErr.message}`);
+    await axios.post(`https://graph.facebook.com/v20.0/${pageId}/feed`, null, {
+      params: {
+        message,
+        link: shareUrl,
+        access_token: pageToken
+      }
+    });
+  }
 
   console.log(`📣 Facebook auto-post published for ${meme.slug}`);
 }

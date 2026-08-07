@@ -595,6 +595,14 @@ function startAutoGenerationScheduler() {
 }
 
 app.use(express.json());
+app.use((req, res, next) => {
+  if (req.path.endsWith('.html') || req.path.endsWith('.js') || req.path.endsWith('.css')) {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  next();
+});
 app.use(express.static('public'));
 
 // Landing page for social crawlers (Open Graph preview + click-through link)

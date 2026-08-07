@@ -44,38 +44,29 @@ if (document.getElementById('content')) {
       .then(data => {
         const { current, prev, next } = data;
         const shareUrl = `${window.location.origin}/m/${current.slug}`;
+        const teaserImageUrl = current.teaserUrl || current.imageUrl;
+        const fullImageUrl = current.imageUrl;
         document.title = `Daily Laffs — ${current.title.replace(/<[^>]*>/g, '')}`;
         content.classList.remove('loading');
-        const fullJokeText = `${current.body.replace(/<[^>]*>/g, '').trim()}${current.closing ? ` ${current.closing.replace(/<[^>]*>/g, '').trim()}` : ''}`.trim();
-        const teaserWords = fullJokeText.split(' ').filter(Boolean);
-        const displayText = teaserWords.length
-          ? `${teaserWords.slice(0, Math.min(12, teaserWords.length)).join(' ')}...`
-          : 'Click the button to reveal the full joke.';
         content.innerHTML = `
           <div class="single-meme">
-            <div class="meme-image-wrap">
-              <img src="${current.imageUrl}" alt="${current.title}" onerror="this.src='https://via.placeholder.com/800x800.png?text=Imagine+incarca'">
-              <div class="meme-overlay" id="memeOverlay">
-                <div class="meme-overlay-text" id="memeOverlayText">${displayText}</div>
-              </div>
-            </div>
+            <img id="memeImage" src="${teaserImageUrl}" alt="${current.title}" onerror="this.src='https://via.placeholder.com/800x800.png?text=Imagine+incarca'">
             <div class="meme-meta">
               <h2>${current.title.replace(/<[^>]*>/g, '')}</h2>
             </div>
             <div class="meme-actions">
               <button type="button" class="btn btn-secondary" id="revealJokeBtn">Reveal joke</button>
-              <a href="${current.imageUrl}" download class="btn btn-secondary">Download</a>
+              <a href="${fullImageUrl}" download class="btn btn-secondary">Download</a>
               <a href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}" target="_blank" class="btn btn-primary">Share</a>
             </div>
           </div>
         `;
 
         const revealBtn = document.getElementById('revealJokeBtn');
-        const overlay = content.querySelector('#memeOverlay');
-        const overlayText = content.querySelector('#memeOverlayText');
-        if (revealBtn && overlay && overlayText) {
+        const memeImage = content.querySelector('#memeImage');
+        if (revealBtn && memeImage) {
           revealBtn.addEventListener('click', () => {
-            overlayText.textContent = fullJokeText;
+            memeImage.src = fullImageUrl;
             revealBtn.textContent = 'Joke revealed';
             revealBtn.disabled = true;
           });

@@ -50,7 +50,12 @@ if (document.getElementById('content')) {
         const displayText = teaserText ? teaserText.split(' ').slice(0, Math.min(12, teaserText.split(' ').length)).join(' ') + '...' : 'Click the button to reveal the full joke.';
         content.innerHTML = `
           <div class="single-meme">
-            <img src="${current.imageUrl}" alt="${current.title}" onerror="this.src='https://via.placeholder.com/800x800.png?text=Imagine+incarca'">
+            <div class="meme-image-wrap">
+              <img src="${current.imageUrl}" alt="${current.title}" onerror="this.src='https://via.placeholder.com/800x800.png?text=Imagine+incarca'">
+              <div class="meme-overlay" id="memeOverlay" hidden>
+                <div class="meme-overlay-text">${current.body.replace(/<[^>]*>/g, '')}${current.closing ? ` ${current.closing.replace(/<[^>]*>/g, '')}` : ''}</div>
+              </div>
+            </div>
             <div class="meme-meta">
               <h2>${current.title.replace(/<[^>]*>/g, '')}</h2>
               <p class="meme-preview">${displayText}</p>
@@ -67,10 +72,11 @@ if (document.getElementById('content')) {
         const revealBtn = document.getElementById('revealJokeBtn');
         const previewText = content.querySelector('.meme-preview');
         const fullText = content.querySelector('.meme-full');
-        if (revealBtn && previewText && fullText) {
+        const overlay = content.querySelector('#memeOverlay');
+        if (revealBtn && previewText && fullText && overlay) {
           revealBtn.addEventListener('click', () => {
-            previewText.hidden = true;
             fullText.hidden = false;
+            overlay.hidden = false;
             revealBtn.textContent = 'Joke revealed';
             revealBtn.disabled = true;
           });

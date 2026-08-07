@@ -10,7 +10,7 @@ if (document.getElementById('gallery')) {
       // Render the image and text correctly
       gallery.innerHTML = memes.map(meme => `
         <div class="meme-card" onclick="window.location.href='meme.html?id=${meme.slug}'">
-          <img src="${meme.imageUrl}" alt="${meme.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/800x800.png?text=Imagine+incarca'">
+          <img src="${meme.imageUrl}" alt="${meme.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/800x800.png?text=Image+loading'">
           <div class="meme-card-info">
             <div class="meme-card-title">${meme.title.replace(/<[^>]*>/g, '')}</div>
             <div class="meme-date">${new Date(meme.createdAt).toLocaleDateString()}</div>

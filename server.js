@@ -9,7 +9,6 @@ const { Storage } = require('@google-cloud/storage');
 const { v4: uuidv4 } = require('uuid');
 const { Feed } = require('feed');
 const { isUniqueJoke } = require('./joke-utils');
-const { getTeaserClip } = require('./preview-utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -104,6 +103,39 @@ function buildHalfTeaserText(body = '', closing = '') {
   const teaserCount = Math.max(8, Math.floor(words.length / 2));
   const teaser = words.slice(0, teaserCount).join(' ');
   return `${teaser}... Click the link for the full meme.`;
+}
+
+function buildQuestionTeaserText(body = '') {
+  const cleanBody = cleanText(body);
+  if (!cleanBody) {
+    return 'Tap reveal to see the full joke.';
+  }
+
+  const questionMatch = cleanBody.match(/^[^?]+\?/);
+  if (questionMatch) {
+    return questionMatch[0].trim();
+  }
+
+  const words = cleanBody.split(' ').filter(Boolean);
+  if (words.length <= 10) {
+    return cleanBody;
+  }
+  return `${words.slice(0, 10).join(' ')}...`;
+}
+
+function buildMemeImageHtml({ bg, title, bodyText, closingText = '' }) {
+  const safeTitle = escapeHtml(cleanText(title));
+  const safeBody = escapeHtml(cleanText(bodyText));
+  const safeClosing = escapeHtml(cleanText(closingText));
+
+  return `
+  <html><body style="margin:0;padding:40px;background:url('${bg}') center/cover;min-height:800px;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;color:white;text-shadow:2px 2px 4px rgba(0,0,0,0.8);">
+    <div style="background:rgba(0,0,0,0.62);padding:40px;border-radius:15px;text-align:center;max-width:700px;">
+      <h2 style="font-size:42px;margin:0 0 25px;color:#ffd700;">${safeTitle}</h2>
+      <p style="font-size:32px;line-height:1.45;margin:0 0 14px;">${safeBody}</p>
+      ${safeClosing ? `<p style="font-size:26px;line-height:1.35;margin:0;">${safeClosing}</p>` : ''}
+    </div>
+  </body></html>`;
 }
 
 function parseJsonSafe(text = '') {
@@ -323,17 +355,29 @@ function getRandomBackground() {
   return `${bgs[index]}${separator}sig=${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
-async function generateImage(html) {
+async function generateImagePair({ bg, title, body, closing }) {
   const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
   const page = await browser.newPage();
   await page.setViewport({ width: 800, height: 800 });
-  await page.setContent(html, { waitUntil: 'networkidle0' });
-  const img = await page.screenshot({ type: 'png' });
-  // Teaser shows only the upper half so full meme requires click-through.
-  const teaser = await page.screenshot({
-    type: 'png',
-    clip: getTeaserClip(800, 800)
+
+  const teaserHtml = buildMemeImageHtml({
+    bg,
+    title,
+    bodyText: buildQuestionTeaserText(body),
+    closingText: ''
   });
+  await page.setContent(teaserHtml, { waitUntil: 'networkidle0' });
+  const teaser = await page.screenshot({ type: 'png' });
+
+  const fullHtml = buildMemeImageHtml({
+    bg,
+    title,
+    bodyText: body,
+    closingText: closing
+  });
+  await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+  const img = await page.screenshot({ type: 'png' });
+
   await browser.close();
   return { img, teaser };
 }
@@ -507,15 +551,12 @@ async function generateAndSaveMeme(source = 'manual') {
 
   const { title, body, closing } = generated;
   const bg = getRandomBackground();
-  const html = `
-  <html><body style="margin:0;padding:40px;background:url('${bg}') center/cover;min-height:800px;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;color:white;text-shadow:2px 2px 4px rgba(0,0,0,0.8);">
-    <div style="background:rgba(0,0,0,0.6);padding:40px;border-radius:15px;text-align:center;max-width:700px;">
-      <h2 style="font-size:42px;margin:0 0 25px;color:#ffd700;">${title}</h2>
-      <p style="font-size:32px;line-height:1.5;margin:0 0 20px;">${body}</p>
-    </div>
-  </body></html>`;
-
-  const { img: imgBuffer, teaser: teaserBuffer } = await generateImage(html);
+  const { img: imgBuffer, teaser: teaserBuffer } = await generateImagePair({
+    bg,
+    title,
+    body,
+    closing
+  });
   const imgName = `${uuidv4()}.png`;
   const imageUrl = await saveGeneratedImage(imgBuffer, imgName);
   const teaserName = `${imgName.replace('.png', '')}-teaser.png`;

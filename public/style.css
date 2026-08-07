@@ -21,6 +21,23 @@ h1 { color: #2d3748; font-size: 2.2rem; }
 /* Pagina single */
 .single-meme { width: 100%; max-width: 460px; background: white; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.12); margin: 0 auto 20px; text-align: center; }
 .single-meme img { width: 100%; display: block; max-height: 58vh; object-fit: contain; background: linear-gradient(180deg, #111827, #374151); margin: 0 auto; }
+.meme-image-wrap { position: relative; }
+.meme-question-overlay {
+	position: absolute;
+	left: 12%;
+	right: 12%;
+	bottom: 14%;
+	background: rgba(0, 0, 0, 0.62);
+	color: #ffffff;
+	border-radius: 12px;
+	padding: 14px 16px;
+}
+.meme-question-overlay p {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1.35;
+}
 .meme-meta { padding: 18px 18px 0; text-align: center; }
 .meme-meta h2 { font-size: 1.25rem; margin-bottom: 10px; color: #1a1a1a; text-align: center; }
 .meme-meta p { color: #4a5568; line-height: 1.5; margin-bottom: 8px; text-align: center; }
@@ -186,6 +203,8 @@ h1 { color: #2d3748; font-size: 2.2rem; }
 	.meme-card, .single-meme { max-width: 100%; }
 	.meme-card img { max-height: 300px; }
 	.single-meme img { max-height: 50vh; }
+	.meme-question-overlay { left: 8%; right: 8%; bottom: 10%; padding: 10px 12px; }
+	.meme-question-overlay p { font-size: 0.92rem; }
 	.meme-meta { padding: 14px 12px 0; }
 	.meme-meta h2 { font-size: 1.08rem; }
 	.meme-meta p { font-size: 0.96rem; }

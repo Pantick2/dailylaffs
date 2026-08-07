@@ -46,11 +46,19 @@ if (document.getElementById('content')) {
         const shareUrl = `${window.location.origin}/m/${current.slug}`;
         const teaserImageUrl = current.teaserUrl || current.imageUrl;
         const fullImageUrl = current.imageUrl;
+        const cleanBody = current.body.replace(/<[^>]*>/g, '').trim();
+        const questionMatch = cleanBody.match(/^[^?]+\?/);
+        const teaserQuestion = questionMatch ? questionMatch[0] : (cleanBody.split(' ').slice(0, 10).join(' ') + (cleanBody.split(' ').length > 10 ? '...' : ''));
         document.title = `Daily Laffs — ${current.title.replace(/<[^>]*>/g, '')}`;
         content.classList.remove('loading');
         content.innerHTML = `
           <div class="single-meme">
-            <img id="memeImage" src="${teaserImageUrl}" alt="${current.title}" onerror="this.src='https://via.placeholder.com/800x800.png?text=Image+loading'">
+            <div class="meme-image-wrap">
+              <img id="memeImage" src="${teaserImageUrl}" alt="${current.title}" onerror="this.src='https://via.placeholder.com/800x800.png?text=Image+loading'">
+              <div class="meme-question-overlay" id="teaserQuestionOverlay">
+                <p>${teaserQuestion}</p>
+              </div>
+            </div>
             <div class="meme-meta">
               <h2>${current.title.replace(/<[^>]*>/g, '')}</h2>
             </div>
@@ -64,9 +72,13 @@ if (document.getElementById('content')) {
 
         const revealBtn = document.getElementById('revealJokeBtn');
         const memeImage = content.querySelector('#memeImage');
+        const teaserQuestionOverlay = content.querySelector('#teaserQuestionOverlay');
         if (revealBtn && memeImage) {
           revealBtn.addEventListener('click', () => {
             memeImage.src = fullImageUrl;
+            if (teaserQuestionOverlay) {
+              teaserQuestionOverlay.style.display = 'none';
+            }
             revealBtn.textContent = 'Joke revealed';
             revealBtn.disabled = true;
           });

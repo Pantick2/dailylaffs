@@ -128,7 +128,7 @@ function buildMemeImageHtml({ bg, title, bodyText, closingText = '', showRevealB
   const safeBody = escapeHtml(cleanText(bodyText));
   const safeClosing = escapeHtml(cleanText(closingText));
   const revealButtonHtml = showRevealButton
-    ? '<div style="display:inline-block;margin-top:22px;padding:12px 28px;border-radius:12px;background:#22c55e;color:#ffffff;font-size:26px;font-weight:700;box-shadow:0 10px 20px rgba(0,0,0,0.35);">Reveal joke</div>'
+    ? '<div style="display:inline-flex;align-items:center;justify-content:center;gap:10px;margin-top:22px;padding:14px 30px;border-radius:14px;background:linear-gradient(135deg,#22c55e,#16a34a);border:2px solid rgba(255,255,255,0.9);color:#ffffff;font-size:28px;font-weight:800;letter-spacing:0.02em;box-shadow:0 12px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.35);">▶ Reveal joke</div>'
     : '';
 
   return `

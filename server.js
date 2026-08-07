@@ -123,10 +123,13 @@ function buildQuestionTeaserText(body = '') {
   return `${words.slice(0, 10).join(' ')}...`;
 }
 
-function buildMemeImageHtml({ bg, title, bodyText, closingText = '' }) {
+function buildMemeImageHtml({ bg, title, bodyText, closingText = '', showRevealButton = false }) {
   const safeTitle = escapeHtml(cleanText(title));
   const safeBody = escapeHtml(cleanText(bodyText));
   const safeClosing = escapeHtml(cleanText(closingText));
+  const revealButtonHtml = showRevealButton
+    ? '<div style="display:inline-block;margin-top:22px;padding:12px 28px;border-radius:12px;background:#22c55e;color:#ffffff;font-size:26px;font-weight:700;box-shadow:0 10px 20px rgba(0,0,0,0.35);">Reveal joke</div>'
+    : '';
 
   return `
   <html><body style="margin:0;padding:40px;background:url('${bg}') center/cover;min-height:800px;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;color:white;text-shadow:2px 2px 4px rgba(0,0,0,0.8);">
@@ -134,6 +137,7 @@ function buildMemeImageHtml({ bg, title, bodyText, closingText = '' }) {
       <h2 style="font-size:42px;margin:0 0 25px;color:#ffd700;">${safeTitle}</h2>
       <p style="font-size:32px;line-height:1.45;margin:0 0 14px;">${safeBody}</p>
       ${safeClosing ? `<p style="font-size:26px;line-height:1.35;margin:0;">${safeClosing}</p>` : ''}
+      ${revealButtonHtml}
     </div>
   </body></html>`;
 }
@@ -364,7 +368,8 @@ async function generateImagePair({ bg, title, body, closing }) {
     bg,
     title,
     bodyText: buildQuestionTeaserText(body),
-    closingText: ''
+    closingText: '',
+    showRevealButton: true
   });
   await page.setContent(teaserHtml, { waitUntil: 'networkidle0' });
   const teaser = await page.screenshot({ type: 'png' });
@@ -457,7 +462,7 @@ async function postMemeToFacebook(meme) {
   const title = cleanText(meme.title);
   const teaserLine = buildQuestionTeaserText(meme.body);
   const teaserImageUrl = getPublicImageUrl(meme.teaserUrl || meme.imageUrl);
-  const message = `${title}\n${teaserLine}\n\nTap the link for the full joke:\n${shareUrl}`;
+  const message = `${title}\n${teaserLine}\n\nTap Reveal joke in the image, then open the link for the full version:\n${shareUrl}`;
 
   try {
     await axios.post(`https://graph.facebook.com/v20.0/${pageId}/photos`, null, {

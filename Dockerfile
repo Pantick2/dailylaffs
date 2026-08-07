@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
 # Install Chromium runtime dependencies required by Puppeteer
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     libxss1 \
     libxtst6 \
+    unzip \
     wget \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*

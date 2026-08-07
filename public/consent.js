@@ -1,6 +1,22 @@
 (function () {
   const ADSENSE_SRC = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3528838516008000';
-  const cfg = window.CMP_SETTINGS || {};
+  const CONSENT_STORAGE_KEY = 'dailylaffs-consent-choice';
+
+  function readStoredConsent() {
+    try {
+      return window.localStorage.getItem(CONSENT_STORAGE_KEY);
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function storeConsent() {
+    try {
+      window.localStorage.setItem(CONSENT_STORAGE_KEY, 'accepted');
+    } catch (_err) {
+      // Ignore storage failures.
+    }
+  }
 
   function initAds() {
     const adSlots = document.querySelectorAll('.adsbygoogle');
@@ -34,56 +50,55 @@
     setTimeout(initAds, 1200);
   }
 
-  function loadCmpScript() {
-    if (!cfg.cmpScriptUrl) {
-      return;
+  function closeBanner() {
+    const banner = document.getElementById('consentBanner');
+    if (banner) {
+      banner.remove();
     }
-    const existing = document.getElementById('cmp-loader-script');
-    if (existing) {
-      return;
-    }
-    const script = document.createElement('script');
-    script.id = 'cmp-loader-script';
-    script.async = true;
-    script.src = cfg.cmpScriptUrl;
-    document.head.appendChild(script);
   }
 
-  function openCmpPreferences() {
-    if (window.googlefc && typeof window.googlefc.showRevocationMessage === 'function') {
-      window.googlefc.showRevocationMessage();
-      return;
-    }
-    if (window.__tcfapi) {
-      try {
-        window.__tcfapi('displayConsentUi', 2, function () {});
-        return;
-      } catch (_err) {
-        // Continue to fallback notice.
-      }
-    }
-    alert('Privacy settings are handled by your CMP. Configure cmpScriptUrl in cmp-config.js.');
+  function acceptConsent() {
+    storeConsent();
+    closeBanner();
+    loadAdsScriptAndInit();
   }
 
-  function createManageButton() {
-    if (document.getElementById('consentManageBtn')) {
+  function showBanner() {
+    if (document.getElementById('consentBanner')) {
       return;
     }
-    const btn = document.createElement('button');
-    btn.id = 'consentManageBtn';
-    btn.className = 'consent-manage-btn';
-    btn.type = 'button';
-    btn.textContent = 'Privacy settings';
-    btn.addEventListener('click', openCmpPreferences);
-    document.body.appendChild(btn);
+
+    const banner = document.createElement('section');
+    banner.id = 'consentBanner';
+    banner.className = 'consent-banner';
+    banner.setAttribute('role', 'dialog');
+    banner.setAttribute('aria-live', 'polite');
+    banner.innerHTML = `
+      <div class="consent-text">
+        <p>Our website uses only strictly necessary technical cookies and non-personalized ads to protect your privacy. By continuing to browse, you agree to their use.</p>
+      </div>
+      <div class="consent-actions">
+        <button type="button" class="btn btn-primary" data-consent-action="accept">Got it</button>
+      </div>
+    `;
+
+    banner.querySelector('[data-consent-action="accept"]').addEventListener('click', acceptConsent);
+    document.body.appendChild(banner);
+  }
+
+  function initConsentFlow() {
+    const storedConsent = readStoredConsent();
+    if (storedConsent === 'accepted') {
+      loadAdsScriptAndInit();
+      return;
+    }
+
+    showBanner();
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', createManageButton);
+    document.addEventListener('DOMContentLoaded', initConsentFlow);
   } else {
-    createManageButton();
+    initConsentFlow();
   }
-
-  loadCmpScript();
-  loadAdsScriptAndInit();
 })();

@@ -26,7 +26,9 @@ This project now supports online storage directly via Google Cloud Storage.
    - GCS_PUBLIC_BASE_URL=https://storage.googleapis.com/daily-laffs-assets (optional)
    - SITE_URL=https://your-domain.com
    - OPENAI_API_KEY=...
-   - + social vars (optional)
+   - ENABLE_INTERNAL_SOCIAL_POSTS=false (recommended when using Make.com)
+   - MAKE_WEBHOOK_URL=https://hook.eu1.make.com/...
+   - + social vars (optional, only if ENABLE_INTERNAL_SOCIAL_POSTS=true)
 
 Notes:
 - If USE_GCS_STORAGE=true, the app stores:
@@ -80,11 +82,25 @@ Exemplu: domeniu.ro
 5. Seteaza SITE_URL la domeniul final, de exemplu:
    - https://domeniu.ro
 
-## 3) Facebook auto-post
+## 3) Make.com auto distribution (recommended)
+
+If you use Make.com for Facebook distribution, keep this app as content generator only:
+- ENABLE_INTERNAL_SOCIAL_POSTS=false
+- MAKE_WEBHOOK_URL=your Make webhook URL
+
+After each generated meme, the app sends:
+- event: meme.generated
+- siteUrl
+- meme object (title, body, closing, imageUrl, teaserUrl, slug, createdAt)
+
+Your Make scenario can then publish to Facebook and any other channels.
+
+## 4) Facebook auto-post (optional, app-native)
 
 Aplicatia are deja postare automata pe Facebook daca setezi:
 - FACEBOOK_PAGE_ID
 - FACEBOOK_PAGE_ACCESS_TOKEN
+- ENABLE_INTERNAL_SOCIAL_POSTS=true
 
 Pasii:
 1. Creeaza Meta App pe developers.facebook.com.
@@ -93,11 +109,12 @@ Pasii:
 4. Pune token-ul si page id in variabilele de mediu.
 5. Genereaza un meme nou din API/UI si verifica postarea.
 
-## 4) Instagram auto-post
+## 5) Instagram auto-post (optional, app-native)
 
 Aplicatia publica automat pe Instagram Business/Creator daca setezi:
 - INSTAGRAM_IG_USER_ID
 - INSTAGRAM_ACCESS_TOKEN
+- ENABLE_INTERNAL_SOCIAL_POSTS=true
 
 Conditii:
 - Cont Instagram Business/Creator.
@@ -108,7 +125,7 @@ Flux API folosit in cod:
 1. POST /{ig-user-id}/media cu image_url + caption
 2. POST /{ig-user-id}/media_publish cu creation_id
 
-## 5) Verificari dupa deploy
+## 6) Verificari dupa deploy
 
 1. Deschide:
    - /
@@ -118,10 +135,12 @@ Flux API folosit in cod:
 3. Verifica logurile Render pentru erori OpenAI/Facebook/Instagram.
 4. Testeaza un link de tip /m/{slug} in Facebook Sharing Debugger pentru preview corect.
 
-## 6) Checklist scurt
+## 7) Checklist scurt
 
 - [ ] SITE_URL este domeniul real (https)
 - [ ] OPENAI_API_KEY setat
-- [ ] Facebook vars setate (optional)
-- [ ] Instagram vars setate (optional)
+- [ ] ENABLE_INTERNAL_SOCIAL_POSTS=false (daca folosesti Make.com)
+- [ ] MAKE_WEBHOOK_URL setat (daca folosesti Make.com)
+- [ ] Facebook vars setate (optional, doar app-native)
+- [ ] Instagram vars setate (optional, doar app-native)
 - [ ] DNS + SSL active

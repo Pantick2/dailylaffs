@@ -9,6 +9,7 @@ const { Storage } = require('@google-cloud/storage');
 const { v4: uuidv4 } = require('uuid');
 const { Feed } = require('feed');
 const { isUniqueJoke } = require('./joke-utils');
+const { getTeaserClip } = require('./preview-utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,13 +17,18 @@ const AUTO_GENERATE_INTERVAL_MS = 8 * 60 * 60 * 1000;
 const USE_GCS_STORAGE = process.env.USE_GCS_STORAGE === 'true';
 const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME || '';
 const GCS_PUBLIC_BASE_URL = (process.env.GCS_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+const GCS_ENABLED = USE_GCS_STORAGE && Boolean(GCS_BUCKET_NAME);
+const ENABLE_INTERNAL_SOCIAL_POSTS = process.env.ENABLE_INTERNAL_SOCIAL_POSTS === 'true';
+const MAKE_WEBHOOK_URL = (process.env.MAKE_WEBHOOK_URL || '').trim();
+const ENABLE_IN_PROCESS_SCHEDULER = process.env.ENABLE_IN_PROCESS_SCHEDULER === 'true';
+const CRON_TRIGGER_KEY = (process.env.CRON_TRIGGER_KEY || '').trim();
 const MEME_DATA_OBJECT = 'data/memes-data.json';
 const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Europe/Bucharest';
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const storage = USE_GCS_STORAGE ? new Storage() : null;
-const bucket = USE_GCS_STORAGE && GCS_BUCKET_NAME ? storage.bucket(GCS_BUCKET_NAME) : null;
+const storage = GCS_ENABLED ? new Storage() : null;
+const bucket = GCS_ENABLED ? storage.bucket(GCS_BUCKET_NAME) : null;
 let generationQueue = Promise.resolve();
 let lastBackgroundIndex = -1;
 
@@ -59,7 +65,7 @@ function getPublicImageUrl(imagePath = '') {
 }
 
 function ensureGcsConfigured() {
-  if (USE_GCS_STORAGE && !bucket) {
+  if (GCS_ENABLED && !bucket) {
     throw new Error('GCS storage is enabled but GCS_BUCKET_NAME is missing.');
   }
 }
@@ -95,60 +101,172 @@ function buildHalfTeaserText(body = '', closing = '') {
   if (!full) return 'Click the link for the full meme.';
 
   const words = full.split(' ').filter(Boolean);
-  const halfCount = Math.max(8, Math.floor(words.length / 2));
-  const half = words.slice(0, halfCount).join(' ');
-  return `${half}... Click the link for the full meme.`;
+  const teaserCount = Math.max(8, Math.floor(words.length / 2));
+  const teaser = words.slice(0, teaserCount).join(' ');
+  return `${teaser}... Click the link for the full meme.`;
+}
+
+function parseJsonSafe(text = '') {
+  const normalized = String(text).replace(/^\uFEFF/, '');
+  return JSON.parse(normalized);
 }
 
 async function generateMemeText() {
   const todayWeekday = getCurrentWeekdayName();
-  const prompt = `You are a sharp stand-up comedian writing short, original jokes for a comedy app. Write actual jokes, not meme captions.
-Hard rules:
+  const creativitySeed = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const prompt = `You write short English jokes with an Eastern-European "banc" rhythm: simple setup, instant punchline, no explanation.
+Goal:
+Make people laugh in one read.
+
+Style direction:
+- Keep it short, clear, and punchy.
+- Use absurd but relatable logic.
+- Jokes should feel like old-school "Bula-style" timing (in English), but do NOT copy known jokes.
+- Heavily prefer these formats:
+  1) Q/A joke ("Why ...? Because ...")
+  2) Very short mini-story ending in a hard twist
+- Avoid observational format unless the punchline is very strong.
+
+Rules:
 - Output exactly 3 lines using this format only.
-- Write everything in English only.
-- Make each line feel like a real joke, not a generic description.
-- Be absurd, self-deprecating, painfully relatable, and unexpectedly clever.
-- The punchline should twist the setup in a surprising way.
-- Avoid corporate or motivational wording. Sound human, chaotic, and funny.
-- Do not repeat old joke ideas, phrases, or themes. Make it fresh and original.
+- Write everything in natural, fluent English.
+- No explanations of the joke.
+- No moral lessons, no motivational tone, no corporate wording.
+- Avoid dark, hateful, sexual, or graphic content.
+- Keep the punchline immediately understandable.
 - If you mention a weekday, you MUST use today: ${todayWeekday}.
+- Creativity seed for this request: ${creativitySeed}
 
 Output format:
 ---
-Title: [short joke title, max 7 words + 1 emoji, punchy]
-Punchline: [a relatable setup that turns into a funny twist]
-End: [a sharp closing line that lands hard]
-Topic inspiration: adulting failures, social anxiety, online shopping addiction, sleep procrastination, gym guilt, budget delusions, phone addiction, meal planning lies, work meetings, overthinking at 3am.`;
+Title: [short title, max 7 words]
+Punchline: [the core joke line]
+End: [very short final kicker]`;
 
   try {
     const res = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.9
+      temperature: 1.05
     });
     return res.choices[0].message.content;
   } catch (err) {
     console.error('⚠️ OpenAI unavailable, using fallback meme text:', err.message);
     const fallback = [
       {
-        title: 'My Discipline Is Fake 😅',
-        body: 'I made a 5am workout plan, then spent 20 minutes finding the perfect sneakers to avoid actually working out.',
-        end: 'My motivation is just a very optimistic ghost.'
+        title: 'Frozen Coffee Logic',
+        body: 'Why do Eskimos never drink coffee outside? Because by the time they sit down, it is iced forever.',
+        end: 'Their espresso has winter tires.'
       },
       {
-        title: 'Budgeting Is a Sport 🧾',
-        body: 'I said I was staying in budget, then bought a candle, a notebook, and a tiny lamp I absolutely did not need.',
-        end: 'My savings account is just emotional support money.'
+        title: 'Weekend Car Report',
+        body: 'I told my friend my weekend was peaceful. Then one car died on the highway and the second one hit a stop sign like it owed money.',
+        end: 'My mechanic now answers with "new number, who dis?"'
       },
       {
-        title: 'Phone Addiction 📱',
-        body: 'I told myself I would scroll less today, then opened my phone to check the time and somehow ended up watching a man fold a fitted sheet.',
-        end: 'The internet is just a highly organized distraction machine.'
+        title: 'Tiny Lemon Problem',
+        body: 'Why do tiny lemons scare me? Because my mouth makes the sour face before I even take a bite.',
+        end: 'My cheeks panic faster than my brain.'
       },
       {
-        title: '3AM Brain 🌙',
-        body: 'At 3am I started thinking about my life choices and somehow ended up comparing my salary to a raccoon’s side hustle.',
-        end: 'My brain is a tiny office with no HR.'
+        title: 'Question With A Trap',
+        body: 'Why did I open my bank app on Friday? To confirm that hope is not a payment method.',
+        end: 'My card laughed first.'
+      },
+      {
+        title: 'Morning Genius',
+        body: 'Why do I set alarms every five minutes? So I can fail in smaller chapters.',
+        end: 'Consistency matters.'
+      },
+      {
+        title: 'Diet Negotiation',
+        body: 'I started a diet today and celebrated with cake so my body knows I am serious.',
+        end: 'Motivation tastes like chocolate.'
+      },
+      {
+        title: 'Gym Membership Philosophy',
+        body: 'Why do I keep my gym card in my wallet? Cardio. I carry it everywhere.',
+        end: 'Fitness is a mindset.'
+      },
+      {
+        title: 'Shopping Strategy',
+        body: 'I went out for toothpaste and came home with candles, socks, and emotional damage.',
+        end: 'The toothpaste was optional.'
+      },
+      {
+        title: 'Sleep Schedule',
+        body: 'Why can I stay awake at 2 AM but die at 2 PM? My body follows vampire office hours.',
+        end: 'HR is confused.'
+      },
+      {
+        title: 'Meeting Survival',
+        body: 'In meetings I nod so confidently that people think I understand the spreadsheet.',
+        end: 'I barely understand my name.'
+      },
+      {
+        title: 'Phone Battery Drama',
+        body: 'My phone at 20 percent acts like it is writing a will.',
+        end: 'Mine too, honestly.'
+      },
+      {
+        title: 'Laundry Economics',
+        body: 'Why do I wait to do laundry? I am giving my clothes one last chance to clean themselves.',
+        end: 'Teamwork is dead.'
+      },
+      {
+        title: 'Traffic Wisdom',
+        body: 'I was patient in traffic until someone honked and unlocked my inner philosopher.',
+        end: 'My speech was not family-friendly.'
+      },
+      {
+        title: 'Cooking Confidence',
+        body: 'I followed a recipe exactly and still invented a new emergency.',
+        end: 'Fire alarm gave it five stars.'
+      },
+      {
+        title: 'Weekend Budget',
+        body: 'Why does money disappear faster on weekends? Because my wallet also wants to have fun.',
+        end: 'We are both irresponsible.'
+      },
+      {
+        title: 'Social Battery',
+        body: 'I said yes to one plan and now I need three business days to recover.',
+        end: 'My extrovert trial expired.'
+      },
+      {
+        title: 'Haircut Timing',
+        body: 'Why do barbers ask if I like it before they turn the mirror?',
+        end: 'Because lies are quicker.'
+      },
+      {
+        title: 'Online Delivery Faith',
+        body: 'Package said "out for delivery" since morning, so now I live by the window.',
+        end: 'I blink in shifts.'
+      },
+      {
+        title: 'Weather Expert',
+        body: 'I checked the forecast, ignored it, and got dressed like optimism.',
+        end: 'Rain educated me.'
+      },
+      {
+        title: 'Fridge Psychology',
+        body: 'Why do I open the fridge ten times? I am waiting for new content.',
+        end: 'Season two is delayed.'
+      },
+      {
+        title: 'Password Situation',
+        body: 'I changed my password to "incorrect" so the computer reminds me when I forget.',
+        end: 'Now we argue daily.'
+      },
+      {
+        title: 'Bus Timing',
+        body: 'I arrive one minute late and the bus leaves; I arrive early and the bus is philosophical.',
+        end: 'Public transport teaches humility.'
+      },
+      {
+        title: 'Friendship Loan',
+        body: 'Why do friends return money in memories? Inflation hit promises first.',
+        end: 'I am rich in stories.'
       }
     ];
     const pick = fallback[Math.floor(Math.random() * fallback.length)];
@@ -211,17 +329,17 @@ async function generateImage(html) {
   await page.setViewport({ width: 800, height: 800 });
   await page.setContent(html, { waitUntil: 'networkidle0' });
   const img = await page.screenshot({ type: 'png' });
-  // Teaser shows only the upper part so full meme requires click-through.
+  // Teaser shows only the upper half so full meme requires click-through.
   const teaser = await page.screenshot({
     type: 'png',
-    clip: { x: 0, y: 0, width: 800, height: 280 }
+    clip: getTeaserClip(800, 800)
   });
   await browser.close();
   return { img, teaser };
 }
 
 async function ensureDataFile() {
-  if (USE_GCS_STORAGE) {
+  if (GCS_ENABLED) {
     ensureGcsConfigured();
     const dataFile = bucket.file(MEME_DATA_OBJECT);
     const [exists] = await dataFile.exists();
@@ -243,16 +361,16 @@ async function ensureDataFile() {
 
 async function readMemes() {
   await ensureDataFile();
-  if (USE_GCS_STORAGE) {
+  if (GCS_ENABLED) {
     const [contents] = await bucket.file(MEME_DATA_OBJECT).download();
-    return JSON.parse(contents.toString('utf8'));
+    return parseJsonSafe(contents.toString('utf8'));
   }
-  return JSON.parse(await fs.readFile('memes-data.json', 'utf8'));
+  return parseJsonSafe(await fs.readFile('memes-data.json', 'utf8'));
 }
 
 async function writeMemes(memes) {
   const json = JSON.stringify(memes, null, 2);
-  if (USE_GCS_STORAGE) {
+  if (GCS_ENABLED) {
     await bucket.file(MEME_DATA_OBJECT).save(json, {
       contentType: 'application/json; charset=utf-8',
       resumable: false
@@ -263,7 +381,7 @@ async function writeMemes(memes) {
 }
 
 async function saveGeneratedImage(imageBuffer, fileName, folder = 'memes') {
-  if (USE_GCS_STORAGE) {
+  if (GCS_ENABLED) {
     ensureGcsConfigured();
     const objectPath = `${folder}/${fileName}`;
     await bucket.file(objectPath).save(imageBuffer, {
@@ -349,13 +467,27 @@ async function postMemeToInstagram(meme) {
   console.log(`📸 Instagram auto-post published for ${meme.slug}`);
 }
 
+async function notifyMakeWebhook(meme) {
+  if (!MAKE_WEBHOOK_URL) {
+    return;
+  }
+
+  await axios.post(MAKE_WEBHOOK_URL, {
+    event: 'meme.generated',
+    siteUrl: getSiteUrl(),
+    meme
+  });
+
+  console.log(`🔗 Make webhook notified for ${meme.slug}`);
+}
+
 async function generateAndSaveMeme(source = 'manual') {
   await ensureDataFile();
   const existingMemes = await readMemes();
   let generated = null;
   let attempts = 0;
 
-  while (!generated && attempts < 8) {
+  while (!generated && attempts < 20) {
     attempts += 1;
     const parsed = parseMemeText(await generateMemeText());
     const candidate = {
@@ -380,7 +512,6 @@ async function generateAndSaveMeme(source = 'manual') {
     <div style="background:rgba(0,0,0,0.6);padding:40px;border-radius:15px;text-align:center;max-width:700px;">
       <h2 style="font-size:42px;margin:0 0 25px;color:#ffd700;">${title}</h2>
       <p style="font-size:32px;line-height:1.5;margin:0 0 20px;">${body}</p>
-      ${closing ? `<p style="font-size:30px;color:#ff6b6b;margin:0;">${closing}</p>` : ''}
     </div>
   </body></html>`;
 
@@ -407,6 +538,18 @@ async function generateAndSaveMeme(source = 'manual') {
   await writeMemes(all);
 
   try {
+    await notifyMakeWebhook(newMeme);
+  } catch (err) {
+    console.error('❌ Make webhook notify failed:', err.message);
+  }
+
+  if (!ENABLE_INTERNAL_SOCIAL_POSTS) {
+    console.log('ℹ️ Internal social auto-posting disabled (ENABLE_INTERNAL_SOCIAL_POSTS is not true).');
+    console.log(`✅ Meme generated (${source}): ${newMeme.slug}`);
+    return newMeme;
+  }
+
+  try {
     await postMemeToFacebook(newMeme);
   } catch (err) {
     console.error('❌ Facebook auto-post failed:', err.message);
@@ -430,6 +573,11 @@ function enqueueGeneration(source) {
 }
 
 function startAutoGenerationScheduler() {
+  if (!ENABLE_IN_PROCESS_SCHEDULER) {
+    console.log('⏲️ In-process auto-generation scheduler disabled. Use Cloud Scheduler trigger.');
+    return;
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     console.warn('⚠️ OPENAI_API_KEY is missing. Auto-generation every 8h is disabled.');
     return;
@@ -471,6 +619,7 @@ app.get('/m/:slug', async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} | Daily Laffs</title>
   <meta name="description" content="${escapeHtml(description)}">
+  <meta name="google-adsense-account" content="ca-pub-3528838516008000">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Daily Laffs">
   <meta property="og:title" content="${escapeHtml(title)}">
@@ -513,6 +662,31 @@ app.get('/rss.xml', async (req, res) => {
   res.send(feed.rss2());
 });
 
+app.get('/sitemap.xml', async (req, res) => {
+  const siteUrl = getSiteUrl();
+  const memes = await readMemes();
+  const staticUrls = [
+    { loc: `${siteUrl}/`, lastmod: new Date().toISOString() },
+    { loc: `${siteUrl}/privacy.html`, lastmod: new Date().toISOString() },
+    { loc: `${siteUrl}/terms.html`, lastmod: new Date().toISOString() }
+  ];
+  const memeUrls = memes.map((meme) => ({
+    loc: `${siteUrl}/m/${meme.slug}`,
+    lastmod: meme.createdAt || new Date().toISOString()
+  }));
+  const urls = [...staticUrls, ...memeUrls];
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.map((item) => `  <url>
+    <loc>${escapeHtml(item.loc)}</loc>
+    <lastmod>${escapeHtml(new Date(item.lastmod).toISOString())}</lastmod>
+  </url>`).join('\n')}
+</urlset>`;
+
+  res.set('Content-Type', 'application/xml; charset=utf-8');
+  res.send(xml);
+});
+
 // Lista meme-uri
 app.get('/api/memes', async (req, res) => {
   const memes = await readMemes();
@@ -531,23 +705,39 @@ app.get('/api/meme/:slug', async (req, res) => {
   });
 });
 
-// Generează meme NOU
-app.post('/api/generate-and-post', async (req, res) => {
+app.post('/internal/auto-generate', async (req, res) => {
+  if (!CRON_TRIGGER_KEY) {
+    return res.status(503).json({ success: false, error: 'CRON_TRIGGER_KEY is not configured.' });
+  }
+
+  const providedKey = String(req.get('x-cron-key') || req.query.key || '').trim();
+  if (!providedKey || providedKey !== CRON_TRIGGER_KEY) {
+    return res.status(401).json({ success: false, error: 'Unauthorized trigger.' });
+  }
+
   try {
-    const newMeme = await enqueueGeneration('manual');
+    const newMeme = await enqueueGeneration('cloud-scheduler-8h');
     res.json({ success: true, meme: newMeme });
   } catch (err) {
-    console.error(err);
+    console.error('❌ Cloud Scheduler generation failed:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.listen(PORT, () => {
   console.log(`✅ Daily Laffs pornit pe http://localhost:${PORT}`);
-  if (USE_GCS_STORAGE) {
+  if (USE_GCS_STORAGE && !GCS_ENABLED) {
+    console.warn('⚠️ USE_GCS_STORAGE=true but GCS_BUCKET_NAME is missing. Falling back to local filesystem.');
+  }
+  if (GCS_ENABLED) {
     console.log(`☁️ Storage mode: Google Cloud Storage (${GCS_BUCKET_NAME})`);
   } else {
     console.log('💾 Storage mode: local filesystem');
+  }
+  if (ENABLE_INTERNAL_SOCIAL_POSTS) {
+    console.log('📣 Internal social auto-posting: enabled');
+  } else {
+    console.log('📣 Internal social auto-posting: disabled');
   }
   startAutoGenerationScheduler();
 });

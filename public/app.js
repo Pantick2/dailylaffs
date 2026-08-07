@@ -1,14 +1,13 @@
-// Galerie principală
 if (document.getElementById('gallery')) {
   fetch('/api/memes')
     .then(res => res.json())
     .then(memes => {
       const gallery = document.getElementById('gallery');
       if (!memes.length) {
-        gallery.innerHTML = `<p style="grid-column:1/-1;text-align:center;color:#888;">No memes yet. Click the button above to generate the first one!</p>`;
+        gallery.innerHTML = `<p style="grid-column:1/-1;text-align:center;color:#888;">No memes yet. Check back soon for fresh jokes.</p>`;
         return;
       }
-      // Afișează corect imaginea și textul
+      // Render the image and text correctly
       gallery.innerHTML = memes.map(meme => `
         <div class="meme-card" onclick="window.location.href='meme.html?id=${meme.slug}'">
           <img src="${meme.imageUrl}" alt="${meme.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/800x800.png?text=Imagine+incarca'">
@@ -20,8 +19,8 @@ if (document.getElementById('gallery')) {
       `).join('');
     })
     .catch(err => {
-      console.error('Eroare incarcare:', err);
-      document.getElementById('gallery').innerHTML = `<p style="color:red;text-align:center;">Eroare la afisare</p>`;
+      console.error('Error loading memes:', err);
+      document.getElementById('gallery').innerHTML = `<p style="color:red;text-align:center;">Error loading memes</p>`;
     });
 }
 
@@ -47,20 +46,35 @@ if (document.getElementById('content')) {
         const shareUrl = `${window.location.origin}/m/${current.slug}`;
         document.title = `Daily Laffs — ${current.title.replace(/<[^>]*>/g, '')}`;
         content.classList.remove('loading');
+        const teaserText = `${current.body.replace(/<[^>]*>/g, '').trim()} ${current.closing ? current.closing.replace(/<[^>]*>/g, '').trim() : ''}`.trim();
+        const displayText = teaserText ? teaserText.split(' ').slice(0, Math.min(12, teaserText.split(' ').length)).join(' ') + '...' : 'Click the button to reveal the full joke.';
         content.innerHTML = `
           <div class="single-meme">
             <img src="${current.imageUrl}" alt="${current.title}" onerror="this.src='https://via.placeholder.com/800x800.png?text=Imagine+incarca'">
             <div class="meme-meta">
               <h2>${current.title.replace(/<[^>]*>/g, '')}</h2>
-              <p>${current.body.replace(/<[^>]*>/g, '')}</p>
-              ${current.closing ? `<p class="meme-closing">${current.closing.replace(/<[^>]*>/g, '')}</p>` : ''}
+              <p class="meme-preview">${displayText}</p>
+              <p class="meme-full" hidden>${current.body.replace(/<[^>]*>/g, '')}${current.closing ? ` ${current.closing.replace(/<[^>]*>/g, '')}` : ''}</p>
             </div>
             <div class="meme-actions">
-              <a href="${current.imageUrl}" download class="btn btn-secondary">Descarcă</a>
-              <a href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}" target="_blank" class="btn btn-primary">Distribuie</a>
+              <button type="button" class="btn btn-secondary" id="revealJokeBtn">Reveal joke</button>
+              <a href="${current.imageUrl}" download class="btn btn-secondary">Download</a>
+              <a href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}" target="_blank" class="btn btn-primary">Share</a>
             </div>
           </div>
         `;
+
+        const revealBtn = document.getElementById('revealJokeBtn');
+        const previewText = content.querySelector('.meme-preview');
+        const fullText = content.querySelector('.meme-full');
+        if (revealBtn && previewText && fullText) {
+          revealBtn.addEventListener('click', () => {
+            previewText.hidden = true;
+            fullText.hidden = false;
+            revealBtn.textContent = 'Joke revealed';
+            revealBtn.disabled = true;
+          });
+        }
         const prevBtn = document.getElementById('prevBtn');
         const nextBtn = document.getElementById('nextBtn');
         const mobileNextWrap = document.getElementById('mobileNextWrap');
@@ -132,7 +146,7 @@ if (document.getElementById('content')) {
       .catch(err => {
         console.error(err);
         content.classList.remove('loading');
-        content.innerHTML = '<p style="text-align:center;color:#c53030;">Nu am putut încărca meme-ul.</p>';
+        content.innerHTML = '<p style="text-align:center;color:#c53030;">We could not load the meme.</p>';
       });
   }
 }

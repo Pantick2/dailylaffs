@@ -24,7 +24,7 @@ if (document.getElementById('gallery')) {
     });
 }
 
-// Pagina individuala
+// Single meme page
 if (document.getElementById('content')) {
   const params = new URLSearchParams(window.location.search);
   const slug = params.get('id');
@@ -50,7 +50,7 @@ if (document.getElementById('content')) {
         content.classList.remove('loading');
         content.innerHTML = `
           <div class="single-meme">
-            <img id="memeImage" src="${teaserImageUrl}" alt="${current.title}" onerror="this.src='https://via.placeholder.com/800x800.png?text=Imagine+incarca'">
+            <img id="memeImage" src="${teaserImageUrl}" alt="${current.title}" onerror="this.src='https://via.placeholder.com/800x800.png?text=Image+loading'">
             <div class="meme-meta">
               <h2>${current.title.replace(/<[^>]*>/g, '')}</h2>
             </div>
